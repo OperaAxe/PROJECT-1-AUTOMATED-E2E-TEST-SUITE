@@ -1,38 +1,40 @@
-name: Playwright Regression Tests
+name: Playwright QA Playbook
 
 on:
   push:
-    branches: [ main, develop ]
+    branches: [main, develop]
   pull_request:
-    branches: [ main ]
+    branches: [main]
+
+permissions:
+  contents: read
 
 jobs:
-  test:
-    timeout-minutes: 10
+  regression:
     runs-on: ubuntu-latest
-
+    timeout-minutes: 10
     steps:
-      - name: Checkout code
+      - name: Check out repository
         uses: actions/checkout@v4
-
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.11'
-
+          python-version: "3.11"
+          cache: pip
       - name: Install dependencies
+        run: python -m pip install -r requirements.txt
+      - name: Install Chromium
+        run: python -m playwright install --with-deps chromium
+      - name: Run regression suite
         run: |
-          python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          playwright install chromium
-
-      - name: Run Playwright tests
-        run: |
-          pytest tests/ -v
-
-      - name: Upload test reports
+          mkdir -p test-results reports
+          pytest -v --junitxml=test-results/junit.xml --html=reports/pytest-report.html --self-contained-html
+      - name: Upload test evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: test-reports
-          path: reports/
+          name: saucedemo-playwright-results
+          path: |
+            test-results/
+            reports/
+          if-no-files-found: ignore

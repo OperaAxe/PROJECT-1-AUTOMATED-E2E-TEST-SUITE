@@ -1,33 +1,52 @@
-import pytest
-from pages.login_page import LoginPage
+"""Login regression checks against the public SauceDemo training store."""
 
-# Register the custom mark to avoid warnings (or remove @pytest.mark.regression)
+import pytest
+from playwright.sync_api import expect
+
+from pages.inventory_page import InventoryPage
+
+
 @pytest.mark.regression
-def test_user_can_login_successfully(page):
-    """Test that a user with valid credentials can log in."""
-    login_page = LoginPage(page)
-    login_page.goto()
+def test_standard_user_can_open_inventory(login_page, page, base_url) -> None:
+    login_page.open()
     login_page.login("standard_user", "secret_sauce")
 
-    assert login_page.is_logged_in() is True
-    assert page.url == "https://www.saucedemo.com/inventory.html"
+    expect(page).to_have_url(f"{base_url.rstrip('/')}/inventory.html")
+    expect(InventoryPage(page, base_url).title).to_have_text("Products")
+
 
 @pytest.mark.regression
-def test_login_fails_with_invalid_password(page):
-    """Test that login fails with an invalid password."""
-    login_page = LoginPage(page)
-    login_page.goto()
-    login_page.login("standard_user", "wrong_password")
+def test_invalid_password_displays_an_actionable_error(login_page) -> None:
+    login_page.open()
+    login_page.login("standard_user", "not-the-password")
 
-    error = login_page.get_error_message()
-    assert "Username and password do not match" in error
+    expect(login_page.error_message).to_contain_text(
+        "Username and password do not match any user in this service"
+    )
+
 
 @pytest.mark.regression
-def test_login_fails_with_empty_fields(page):
-    """Test that login fails when fields are empty."""
-    login_page = LoginPage(page)
-    login_page.goto()
-    login_page.login("", "")
+def test_missing_username_is_rejected(login_page) -> None:
+    login_page.open()
+    login_page.login("", "secret_sauce")
 
-    error = login_page.get_error_message()
-    assert "Username is required" in error
+    expect(login_page.error_message).to_contain_text("Username is required")
+
+
+@pytest.mark.regression
+def test_missing_password_is_rejected(login_page) -> None:
+    login_page.open()
+    login_page.login("standard_user", "")
+
+    expect(login_page.error_message).to_contain_text("Password is required")
+
+
+@pytest.mark.regression
+def test_locked_out_user_cannot_open_inventory(login_page, page, base_url) -> None:
+    login_page.open()
+    login_page.login("locked_out_user", "secret_sauce")
+
+    expect(login_page.error_message).to_contain_text(
+        "Sorry, this user has been locked out"
+    )
+    expect(page).not_to_have_url(f"{base_url.rstrip('/')}/inventory.html")
